@@ -70,3 +70,15 @@ persistence:
   mongodb:
     enabled: true
     size: 10Gi
+
+tasks:
+  enabled: false
+  checkAlerts:
+    schedule: "*/1 * * * *"  # Runs every 1 minute
+    resources:
+      limits:
+        cpu: 200m
+        memory: 256Mi
+      requests:
+        cpu: 100m
+        memory: 128Mi
