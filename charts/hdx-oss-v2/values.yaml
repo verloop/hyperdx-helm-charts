@@ -19,6 +19,7 @@ hyperdx:
     tls:
       enabled: false
       secretName: "hyperdx-tls"
+  replicas: 1
 
 mongodb:
   image: "mongo:5.0.14-focal"
