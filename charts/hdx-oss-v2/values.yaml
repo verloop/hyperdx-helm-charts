@@ -60,6 +60,8 @@ otel:
   httpPort: 4318
   healthPort: 8888
   enabled: true
+  # Clickhouse endpoint - defaults to built-in Clickhouse service
+  clickhouseEndpoint: ""
 
 persistence:
   mongodb:
