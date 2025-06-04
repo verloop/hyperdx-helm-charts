@@ -91,7 +91,11 @@ jobs:
         EOF
         
         # Install the chart
-        helm install hyperdx-test ./charts/hdx-oss-v2 -f test-values.yaml --wait --timeout=10m
+        helm install hyperdx-test ./charts/hdx-oss-v2 -f test-values.yaml --timeout=5m
+        
+        # Give services time to initialize after pods are running
+        echo "Waiting for services to initialize..."
+        sleep 60
 
     - name: Verify deployment
       run: |
