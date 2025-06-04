@@ -91,11 +91,11 @@ jobs:
         EOF
         
         # Install the chart
-        helm install hyperdx-test ./charts/hdx-oss-v2 -f test-values.yaml --timeout=5m
+        helm install hyperdx-test ./charts/hdx-oss-v2 -f test-values.yaml --timeout=2m
         
         # Give services time to initialize after pods are running
         echo "Waiting for services to initialize..."
-        sleep 60
+        sleep 20
 
     - name: Verify deployment
       run: |
@@ -126,7 +126,7 @@ jobs:
         kubectl get events --sort-by=.metadata.creationTimestamp
         
         echo "=== HyperDX App Logs ==="
-        kubectl logs -l app.kubernetes.io/name=hdx-oss-v2 --tail=100 || true
+        kubectl logs -l app=app --tail=100 || true
         
         echo "=== ClickHouse Logs ==="
         kubectl logs -l app=clickhouse --tail=100 || true
