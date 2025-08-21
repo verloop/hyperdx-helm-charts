@@ -19,11 +19,12 @@ hyperdx:
     #   operator: "Equal"
     #   value: "value1"
     #   effect: "NoSchedule"
-  apiKey:
-    valueFrom:
-      secretKeyRef:
-        name: hyperdx-secret
-        key: API_KEY
+  apiKey: ""
+  # Tell the chart to use your existing secret for the API key.
+  existingSecret: "hyperdx-secret"
+  # Specify the key within the secret that holds the API key.
+  apiKeySecretKey: "API_KEY"
+
   apiPort: 8000
   appPort: 3000
   opampPort: 4320
@@ -60,7 +61,7 @@ hyperdx:
         "host": "http://{{ include "hdx-oss.fullname" . }}-clickhouse:8123",
         "port": 8123,
         "username": "app",
-        "password": "{{ .Values.clickhouse.config.users.appUserPassword.valueFrom.secretKeyRef.name | fromSecret .Release.Namespace "clickhouse-app-user-password" | b64dec }}"
+        "password": "{{ .Values.clickhouse.config.users.appUserPassword }}"
       }
     ]
 
@@ -251,16 +252,8 @@ clickhouse:
     endpoint: "/metrics"
   config:
     users:
-      appUserPassword:
-        valueFrom:
-          secretKeyRef:
-            name: hyperdx-secret
-            key: clickhouse-app-user-password
-      otelUserPassword:
-        valueFrom:
-          secretKeyRef:
-            name: hyperdx-secret
-            key: clickhouse-otel-user-password
+      appUserPassword: "some-app-password"
+      otelUserPassword: "some-user-password"
       otelUserName: "otelcollector"
     # Network CIDRs for Kubernetes cluster access control
     # These CIDRs ensure ClickHouse connections are locked down to intra-cluster only
