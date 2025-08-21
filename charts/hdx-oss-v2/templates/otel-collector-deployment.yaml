@@ -32,6 +32,16 @@ spec:
       tolerations:
         {{- toYaml .Values.otel.tolerations | nindent 8 }}
       {{- end }}
+      {{- if .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml .Values.global.imagePullSecrets | nindent 8 }}
+      {{- end }}
+      {{- if .Values.otel.customConfig }}
+      volumes:
+        - name: custom-config
+          configMap:
+            name: {{ include "hdx-oss.fullname" . }}-otel-custom-config
+      {{- end }}
       containers:
         - name: otel-collector
           image: "{{ .Values.otel.image.repository }}:{{ .Values.otel.image.tag | default .Chart.AppVersion }}"
@@ -45,6 +55,26 @@ spec:
           {{- if .Values.otel.resources }}
           resources:
             {{- toYaml .Values.otel.resources | nindent 12 }}
+          {{- end }}
+          {{- if .Values.otel.livenessProbe.enabled }}
+          livenessProbe:
+            httpGet:
+              path: /
+              port: {{ .Values.otel.port }}
+            initialDelaySeconds: {{ .Values.otel.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.otel.livenessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.otel.livenessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.otel.livenessProbe.failureThreshold }}
+          {{- end }}
+          {{- if .Values.otel.readinessProbe.enabled }}
+          readinessProbe:
+            httpGet:
+              path: /
+              port: {{ .Values.otel.port }}
+            initialDelaySeconds: {{ .Values.otel.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.otel.readinessProbe.periodSeconds}}
+            timeoutSeconds: {{ .Values.otel.readinessProbe.timeoutSeconds}}
+            failureThreshold: {{ .Values.otel.readinessProbe.failureThreshold }}
           {{- end }}
           env:
             - name: CLICKHOUSE_ENDPOINT
@@ -70,9 +100,20 @@ spec:
               value: {{ .Values.otel.clickhouseUser | default .Values.clickhouse.config.users.otelUserName }}
             - name: CLICKHOUSE_PASSWORD
               value: {{ .Values.otel.clickhousePassword | default .Values.clickhouse.config.users.otelUserPassword }}
+            {{- if .Values.otel.customConfig }}
+            - name: CUSTOM_OTELCOL_CONFIG_FILE
+              value: /etc/otelcol-contrib/custom.config.yaml
+            {{- end }}
             {{- with .Values.otel.env }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
+          {{- if .Values.otel.customConfig }}
+          volumeMounts:
+            - name: custom-config
+              mountPath: /etc/otelcol-contrib/custom.config.yaml
+              subPath: custom.config.yaml
+              readOnly: true
+          {{- end }}
 ---
 apiVersion: v1
 kind: Service

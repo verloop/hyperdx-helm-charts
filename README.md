@@ -69,7 +69,9 @@ helm install my-hyperdx hyperdx/hdx-oss-v2
 
 ### External ClickHouse
 
-If you have an existing ClickHouse cluster:
+If you have an existing ClickHouse cluster, you have two options for configuring connections:
+
+#### Option 1: Inline Configuration (Simple)
 
 ```yaml
 # values-external-clickhouse.yaml
@@ -91,6 +93,93 @@ hyperdx:
         "password": "your-password"
       }
     ]
+```
+
+#### Option 2: External Secret (Recommended for Production)
+
+For production deployments where you want to keep credentials separate from your Helm configuration:
+
+```yaml
+# values-external-clickhouse-secret.yaml
+clickhouse:
+  enabled: false  # Disable the built-in ClickHouse
+
+otel:
+  clickhouseEndpoint: "tcp://your-clickhouse-server:9000"
+  clickhousePrometheusEndpoint: "http://your-clickhouse-server:9363"  # Optional
+
+hyperdx:
+  # Use an existing secret for complete configuration (connections + sources)
+  useExistingConfigSecret: true
+  existingConfigSecret: "hyperdx-external-config"
+  existingConfigConnectionsKey: "connections.json"
+  existingConfigSourcesKey: "sources.json"
+```
+
+Create your configuration secret:
+
+```bash
+# Create the connections JSON
+cat <<EOF > connections.json
+[
+  {
+    "name": "Production ClickHouse",
+    "host": "https://your-production-clickhouse.com:8123",
+    "port": 8123,
+    "username": "hyperdx_user",
+    "password": "your-secure-password"
+  }
+]
+EOF
+
+# Create the sources JSON
+cat <<EOF > sources.json
+[
+  {
+    "from": {
+      "databaseName": "default",
+      "tableName": "otel_logs"
+    },
+    "kind": "log",
+    "name": "Logs",
+    "connection": "Production ClickHouse",
+    "timestampValueExpression": "TimestampTime",
+    "displayedTimestampValueExpression": "Timestamp",
+    "implicitColumnExpression": "Body",
+    "serviceNameExpression": "ServiceName",
+    "bodyExpression": "Body",
+    "eventAttributesExpression": "LogAttributes",
+    "resourceAttributesExpression": "ResourceAttributes",
+    "severityTextExpression": "SeverityText",
+    "traceIdExpression": "TraceId",
+    "spanIdExpression": "SpanId"
+  },
+  {
+    "from": {
+      "databaseName": "default",
+      "tableName": "otel_traces"
+    },
+    "kind": "trace",
+    "name": "Traces",
+    "connection": "Production ClickHouse",
+    "timestampValueExpression": "Timestamp",
+    "displayedTimestampValueExpression": "Timestamp",
+    "implicitColumnExpression": "SpanName",
+    "serviceNameExpression": "ServiceName",
+    "traceIdExpression": "TraceId",
+    "spanIdExpression": "SpanId",
+    "durationExpression": "Duration"
+  }
+]
+EOF
+
+# Create the Kubernetes secret
+kubectl create secret generic hyperdx-external-config \
+  --from-file=connections.json=connections.json \
+  --from-file=sources.json=sources.json
+
+# Clean up the local files
+rm connections.json sources.json
 ```
 
 ### External OTEL Collector
@@ -125,6 +214,7 @@ otel:
 
 hyperdx:
   otelExporterEndpoint: "http://your-otel-collector:4318"
+  # Option 1: Inline configuration (for testing/development)
   defaultConnections: |
     [
       {
@@ -135,6 +225,12 @@ hyperdx:
         "password": "your-password"
       }
     ]
+  
+  # Option 2: External secret (recommended for production)
+  # useExistingConfigSecret: true
+  # existingConfigSecret: "my-external-config"
+  # existingConfigConnectionsKey: "connections.json"
+  # existingConfigSourcesKey: "sources.json"
 ```
 
 ## Configuration
@@ -252,15 +348,15 @@ hyperdx:
     host: "hyperdx.yourdomain.com"  # Set this to your desired domain
 ```
 
-#### Configuring `ingress.host` and `hyperdx.appUrl`
+#### Configuring `ingress.host` and `hyperdx.frontendUrl`
 
 - **`hyperdx.ingress.host`**: Set to the domain you want to use for accessing HyperDX (e.g., `hyperdx.yourdomain.com`).
-- **`hyperdx.appUrl`**: Should match the ingress host and include the protocol (e.g., `https://hyperdx.yourdomain.com`).
+- **`hyperdx.frontendUrl`**: Should match the ingress host and include the protocol (e.g., `https://hyperdx.yourdomain.com`).
 
 **Example:**
 ```yaml
 hyperdx:
-  appUrl: "https://hyperdx.yourdomain.com"
+  frontendUrl: "https://hyperdx.yourdomain.com"
   ingress:
     enabled: true
     host: "hyperdx.yourdomain.com"
@@ -323,7 +419,7 @@ spec:
 
 - **Path and Rewrite Configuration:**
   - For Next.js and other SPAs, always use a regex path and rewrite annotation as shown above. Do not use just `path: /` without a rewrite, as this will break static asset serving.
-- **Mismatched `appUrl` and `ingress.host`:**
+- **Mismatched `frontendUrl` and `ingress.host`:**
   - If these do not match, you may experience issues with cookies, redirects, and asset loading.
 - **TLS Misconfiguration:**
   - Ensure your TLS secret is valid and referenced correctly in the ingress.
@@ -359,6 +455,7 @@ hyperdx:
               - path: /v1/(traces|metrics|logs)
                 pathType: Prefix
                 port: 4318
+                name: otel-collector
         tls:
           - hosts:
               - collector.yourdomain.com
@@ -447,7 +544,7 @@ Use the fully qualified domain name (FQDN) for the OpAMP server URL:
 
 ```bash
 helm install my-hyperdx hyperdx/hdx-oss-v2 \
-  --set hyperdx.appUrl="http://your-external-ip-or-domain.com" \
+  --set hyperdx.frontendUrl="http://your-external-ip-or-domain.com" \
   --set otel.opampServerUrl="http://my-hyperdx-hdx-oss-v2-app.default.svc.cluster.local:4320"
 ```
 
@@ -456,7 +553,7 @@ helm install my-hyperdx hyperdx/hdx-oss-v2 \
 ```yaml
 # values-gke.yaml
 hyperdx:
-  appUrl: "http://34.123.61.99"  # Use your LoadBalancer external IP
+  frontendUrl: "http://34.123.61.99"  # Use your LoadBalancer external IP
 
 otel:
   opampServerUrl: "http://my-hyperdx-hdx-oss-v2-app.default.svc.cluster.local:4320"
@@ -476,7 +573,7 @@ For EKS deployments, consider these common configurations:
 ```yaml
 # values-eks.yaml
 hyperdx:
-  appUrl: "http://your-alb-domain.com"
+  frontendUrl: "http://your-alb-domain.com"
 
 # EKS typically uses these pod CIDRs
 clickhouse:
@@ -501,7 +598,7 @@ For AKS deployments:
 ```yaml
 # values-aks.yaml
 hyperdx:
-  appUrl: "http://your-azure-lb.com"
+  frontendUrl: "http://your-azure-lb.com"
 
 # AKS pod networking
 clickhouse:
@@ -513,7 +610,7 @@ clickhouse:
 
 ### Production Cloud Deployment Checklist
 
-- [ ] Configure proper `appUrl` with your external domain/IP
+- [ ] Configure proper `frontendUrl` with your external domain/IP
 - [ ] Set up ingress with TLS for HTTPS access
 - [ ] Override `otel.opampServerUrl` with FQDN if experiencing connection issues
 - [ ] Adjust `clickhouse.config.clusterCidrs` for your pod network CIDR
