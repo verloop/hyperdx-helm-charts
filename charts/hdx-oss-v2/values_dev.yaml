@@ -33,11 +33,7 @@ hyperdx:
   # Endpoint to send hyperdx logs/traces/metrics to.Defaults to the chart's otel collector endpoint.
   otelExporterEndpoint: "http://otel-collector.observability.svc.cluster.local:4317"
   #  mongoUri: mongodb://{{ include "hdx-oss.fullname" . }}-mongodb:{{ .Values.mongodb.port }}/hyperdx
-  mongoUri:
-    valueFrom:
-      secretKeyRef:
-        name: hyperdx-secret
-        key: MONGO_URI
+  mongoUri: ""
 
   # Pod-level annotations (applied to the deployment pods)
   annotations: {}
@@ -46,7 +42,12 @@ hyperdx:
   # Pod-level labels (applied to the deployment pods)
   labels: {}
     # myLabel: "myValue"
-  env: []
+  env:
+    - name: MONGO_URI
+      valueFrom:
+        secretKeyRef:
+          name: hyperdx-secret
+          key: MONGO_URI
     # Additional environment variables can be configured here
     # This is preserved for backward compatibility and advanced use cases
 
