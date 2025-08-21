@@ -1,59 +1,85 @@
 global:
   imageRegistry: ""
+  # List of image pull secrets to use for pulling images from private registries
+  # This helps avoid rate limiting (429 errors) when pulling from Docker Hub
+  # Example:
+  # imagePullSecrets:
+  #   - name: regcred
+  #   - name: docker-hub-secret
   imagePullSecrets: []
   storageClassName: "local-path"
+  # Keep PVCs when uninstalling helm release to preserve data
+  keepPVC: false
 
 hyperdx:
   image:
     repository: docker.hyperdx.io/hyperdx/hyperdx
     tag:
     pullPolicy: IfNotPresent
+  livenessProbe:
+    enabled: true
+    initialDelaySeconds: 10
+    periodSeconds: 30
+    timeoutSeconds: 5
+    failureThreshold: 3
+  readinessProbe:
+    enabled: true
+    initialDelaySeconds: 1
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
   # Add nodeSelector and tolerations for hyperdx service
   nodeSelector: {}
     # Example:
     # kubernetes.io/os: linux
-    # node-role.kubernetes.io/worker: "true"
+  # node-role.kubernetes.io/worker: "true"
   tolerations: []
     # Example:
     # - key: "key1"
     #   operator: "Equal"
     #   value: "value1"
-    #   effect: "NoSchedule"
-  apiKey: ""
-  # Tell the chart to use your existing secret for the API key.
-  existingSecret: "hyperdx-secret"
-  # Specify the key within the secret that holds the API key.
-  apiKeySecretKey: "API_KEY"
-
+  #   effect: "NoSchedule"
+  apiKey: "some-api-key"
   apiPort: 8000
   appPort: 3000
   opampPort: 4320
-  appUrl: "http://monitoring.dev.verloop.io"
+  # deprecated: use frontendUrl instead
+  appUrl: "https://monitoring.dev.verloop.io"
+  # The URL that will be use to access the frontend. Defaults to the http://localhost:3000.
+  # If you have an ingress enabled, you should set this to the ingress host with the protocol. E.g. https://hdx-my-domain.com
+  frontendUrl: "https://monitoring.dev.verloop.io"
   logLevel: "info"
   usageStatsEnabled: true
   # Endpoint to send hyperdx logs/traces/metrics to.Defaults to the chart's otel collector endpoint.
-  otelExporterEndpoint: "http://otel-collector.observability.svc.cluster.local:4317"
-  #  mongoUri: mongodb://{{ include "hdx-oss.fullname" . }}-mongodb:{{ .Values.mongodb.port }}/hyperdx
-  mongoUri: ""
+  otelExporterEndpoint: http://{{ include "hdx-oss.fullname" . }}-otel-collector:{{ .Values.otel.httpPort }}
+  mongoUri: mongodb://{{ include "hdx-oss.fullname" . }}-mongodb:{{ .Values.mongodb.port }}/hyperdx
 
   # Pod-level annotations (applied to the deployment pods)
   annotations: {}
-    # myAnnotation: "myValue"
+  # myAnnotation: "myValue"
 
   # Pod-level labels (applied to the deployment pods)
   labels: {}
-    # myLabel: "myValue"
-  env:
-    - name: MONGO_URI
-      valueFrom:
-        secretKeyRef:
-          name: hyperdx-secret
-          key: MONGO_URI
+  # myLabel: "myValue"
+  env: []
     # Additional environment variables can be configured here
-    # This is preserved for backward compatibility and advanced use cases
+  # This is preserved for backward compatibility and advanced use cases
 
   # Default connections and sources (ENABLED BY DEFAULT)
-  # Set to empty string to disable: defaultConnections: ""
+  # Set to empty string to disable: defaultConnections: "" or defaultSources: ""
+  #
+  # To use an existing secret instead of inline configuration, set:
+  # useExistingConfigSecret: true
+  # existingConfigSecret: "my-hyperdx-config"
+  # existingConfigConnectionsKey: "connections.json"  # defaults to "connections.json"
+  # existingConfigSourcesKey: "sources.json"  # defaults to "sources.json"
+  #
+  # The secret should contain separate keys for connections and sources JSON arrays
+  useExistingConfigSecret: false
+  existingConfigSecret: ""
+  existingConfigConnectionsKey: "connections.json"
+  existingConfigSourcesKey: "sources.json"
+
   defaultConnections: |
     [
       {
@@ -173,7 +199,10 @@ hyperdx:
     enabled: true
     ingressClassName: nginx-1.6.4
     annotations: {}
+    # The host to use for the ingress. Defaults to localhost. Be sure to update hyperdx.frontendUrl with this host value + protocol
     host: "monitoring.dev.verloop.io"  # Production domain
+    path: "/(.*)"
+    pathType: "ImplementationSpecific"
     proxyBodySize: "100m"
     proxyConnectTimeout: "60"
     proxySendTimeout: "60"
@@ -211,15 +240,55 @@ hyperdx:
     annotations: {}
       # Example service annotations:
       # service.beta.kubernetes.io/aws-load-balancer-internal: "true"
-      # cloud.google.com/load-balancer-type: "Internal"
+    # cloud.google.com/load-balancer-type: "Internal"
 
 mongodb:
-  enabled: false
+  image: "mongo:5.0.14-focal"
+  port: 27017
+  enabled: true
+  # Add nodeSelector and tolerations for mongodb service
+  nodeSelector: {}
+    # Example:
+    # kubernetes.io/os: linux
+  # node-role.kubernetes.io/worker: "true"
+  tolerations: []
+    # Example:
+    # - key: "key1"
+    #   operator: "Equal"
+    #   value: "value1"
+  #   effect: "NoSchedule"
+  persistence:
+    enabled: true
+    dataSize: 10Gi
+  livenessProbe:
+    enabled: true
+    initialDelaySeconds: 10
+    periodSeconds: 30
+    timeoutSeconds: 5
+    failureThreshold: 3
+  readinessProbe:
+    enabled: true
+    initialDelaySeconds: 1
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
 
 clickhouse:
   image: "clickhouse/clickhouse-server:24-alpine"
   port: 8123
   nativePort: 9000
+  livenessProbe:
+    enabled: true
+    initialDelaySeconds: 10
+    periodSeconds: 30
+    timeoutSeconds: 5
+    failureThreshold: 3
+  readinessProbe:
+    enabled: true
+    initialDelaySeconds: 1
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
   enabled: true
   # Add nodeSelector and tolerations for clickhouse service
   nodeSelector: {}
@@ -252,8 +321,8 @@ clickhouse:
     endpoint: "/metrics"
   config:
     users:
-      appUserPassword: "some-app-password"
-      otelUserPassword: "some-user-password"
+      appUserPassword: "hyperdx"
+      otelUserPassword: "otelcollectorpass"
       otelUserName: "otelcollector"
     # Network CIDRs for Kubernetes cluster access control
     # These CIDRs ensure ClickHouse connections are locked down to intra-cluster only
@@ -265,7 +334,106 @@ clickhouse:
       - "192.168.0.0/16"    # OrbStack, Minikube, and local development
 
 otel:
-  enabled: false
+  image:
+    repository: docker.hyperdx.io/hyperdx/hyperdx-otel-collector
+    tag:
+    pullPolicy: IfNotPresent
+  replicas: 1
+  resources: {}
+    # Example:
+    # requests:
+    #   memory: "127Mi"
+    #   cpu: "100m"
+    # limits:
+    #   memory: "256Mi"
+  #   cpu: "200m"
+  # Pod-level annotations (applied to the deployment pods)
+  annotations: {}
+  # myAnnotation: "myValue"
+  # Add nodeSelector and tolerations for otel-collector service
+  nodeSelector: {}
+    # Example:
+    # kubernetes.io/os: linux
+  # node-role.kubernetes.io/worker: "true"
+  tolerations: []
+    # Example:
+    # - key: "key1"
+    #   operator: "Equal"
+    #   value: "value1"
+  #   effect: "NoSchedule"
+  port: 13133
+  nativePort: 24225
+  grpcPort: 4317
+  httpPort: 4318
+  healthPort: 8888
+  enabled: true
+  env: []
+    # Additional environment variables can be configured here
+    # Example:
+    # - name: CUSTOM_VAR
+    #   value: "my-value"
+    # - name: SECRET_VAR
+    #   valueFrom:
+    #     secretKeyRef:
+    #       name: my-secret
+  #       key: secret-key
+  # Custom OTEL Collector config - allows you to provide your own OTEL Collector configuration
+  # Provide your OTEL Collector configuration as a multi-line string
+  # This will be mounted as /etc/otelcol-contrib/custom.config.yaml and
+  # the CUSTOM_OTELCOL_CONFIG_FILE environment variable will point to it
+  # Example:
+  # customConfig: |
+  #   receivers:
+  #     hostmetrics:
+  #       collection_interval: 5s
+  #       scrapers:
+  #         cpu:
+  #         load:
+  #         memory:
+  #   service:
+  #     pipelines:
+  #       metrics/hostmetrics:
+  #         receivers: [hostmetrics]
+  #         processors: [memory_limiter, batch]
+  #         exporters: [clickhouse]
+  customConfig:
+  # Opamp server URL - defaults to the app service. Customize if you want to use a different Opamp server.
+  # Leave empty if you want to use the app service.
+  # Example: opampServerUrl: "http://custom-opamp-server:4320"
+  opampServerUrl:
+  # Clickhouse endpoint - defaults to chart's Clickhouse service. Customize if you want to use a different Clickhouse service.
+  # Leave empty if you want to use the chart's Clickhouse service.
+  # Example: clickhouseEndpoint: "tcp://custom-clickhouse-service:9000"
+  clickhouseEndpoint:
+  clickhouseUser:
+  clickhousePassword:
+  # Clickhouse Prometheus endpoint - defaults to chart's Clickhouse prometheus service. Customize if you want to use a different Clickhouse prometheus service.
+  # Leave empty if prometheus is disabled.
+  # Example: clickhousePrometheusEndpoint: "http://custom-clickhouse-service:9363"
+  clickhousePrometheusEndpoint:
+  # Clickhouse database to send logs/traces/metrics to. Defaults to "default"
+  clickhouseDatabase: "default"
+  livenessProbe:
+    enabled: true
+    initialDelaySeconds: 10
+    periodSeconds: 30
+    timeoutSeconds: 5
+    failureThreshold: 3
+  readinessProbe:
+    enabled: true
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
 
 tasks:
   enabled: false
+  checkAlerts:
+    schedule: "*/1 * * * *"  # Runs every 1 minute
+    resources:
+      limits:
+        cpu: 200m
+        memory: 256Mi
+      requests:
+        cpu: 100m
+        memory: 128Mi
