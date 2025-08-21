@@ -39,7 +39,11 @@ hyperdx:
     #   operator: "Equal"
     #   value: "value1"
   #   effect: "NoSchedule"
-  apiKey: "fdf6a431-8bae-44c4-824f-3fa10778d2b9"
+  apiKey:
+    valueFrom:
+      secretKeyRef:
+        name: hyperdx-secret
+        key: API_KEY
   apiPort: 8000
   appPort: 3000
   opampPort: 4320
@@ -61,7 +65,9 @@ hyperdx:
   # Pod-level labels (applied to the deployment pods)
   labels: {}
   # myLabel: "myValue"
-  env: []
+  env:
+    - name: BETA_CH_OTEL_JSON_SCHEMA_ENABLED
+      value: "true"
     # Additional environment variables can be configured here
   # This is preserved for backward compatibility and advanced use cases
 
