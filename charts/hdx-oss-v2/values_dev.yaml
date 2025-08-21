@@ -39,7 +39,7 @@ hyperdx:
     #   operator: "Equal"
     #   value: "value1"
   #   effect: "NoSchedule"
-  apiKey: "some-api-key"
+  apiKey: "fdf6a431-8bae-44c4-824f-3fa10778d2b9"
   apiPort: 8000
   appPort: 3000
   opampPort: 4320
