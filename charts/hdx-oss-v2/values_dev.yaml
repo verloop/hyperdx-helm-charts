@@ -7,7 +7,7 @@ global:
   #   - name: regcred
   #   - name: docker-hub-secret
   imagePullSecrets: []
-  storageClassName: "default"
+  storageClassName: "standard"
   # Keep PVCs when uninstalling helm release to preserve data
   keepPVC: false
 
