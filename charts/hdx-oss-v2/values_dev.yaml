@@ -41,7 +41,7 @@ hyperdx:
   #   effect: "NoSchedule"
   apiKey: "some-api-key"
   apiPort: 8000
-  appPort: 3000
+  appPort: 80
   opampPort: 4320
   # deprecated: use frontendUrl instead
   appUrl: "https://monitoring.dev.verloop.io"
