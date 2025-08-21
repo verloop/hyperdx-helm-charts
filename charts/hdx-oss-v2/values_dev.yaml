@@ -201,7 +201,7 @@ hyperdx:
     annotations: {}
     # The host to use for the ingress. Defaults to localhost. Be sure to update hyperdx.frontendUrl with this host value + protocol
     host: "monitoring.dev.verloop.io"  # Production domain
-    path: "/(.*)"
+    path: "/"
     pathType: "ImplementationSpecific"
     proxyBodySize: "100m"
     proxyConnectTimeout: "60"
