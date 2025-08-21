@@ -1,0 +1,277 @@
+global:
+  imageRegistry: ""
+  imagePullSecrets: []
+  storageClassName: "local-path"
+
+hyperdx:
+  image:
+    repository: docker.hyperdx.io/hyperdx/hyperdx
+    tag:
+    pullPolicy: IfNotPresent
+  # Add nodeSelector and tolerations for hyperdx service
+  nodeSelector: {}
+    # Example:
+    # kubernetes.io/os: linux
+    # node-role.kubernetes.io/worker: "true"
+  tolerations: []
+    # Example:
+    # - key: "key1"
+    #   operator: "Equal"
+    #   value: "value1"
+    #   effect: "NoSchedule"
+  apiKey:
+    valueFrom:
+      secretKeyRef:
+        name: hyperdx-secret
+        key: API_KEY
+  apiPort: 8000
+  appPort: 3000
+  opampPort: 4320
+  appUrl: "http://monitoring.dev.verloop.io"
+  logLevel: "info"
+  usageStatsEnabled: true
+  # Endpoint to send hyperdx logs/traces/metrics to.Defaults to the chart's otel collector endpoint.
+  otelExporterEndpoint: "http://otel-collector.observability.svc.cluster.local:4317"
+  #  mongoUri: mongodb://{{ include "hdx-oss.fullname" . }}-mongodb:{{ .Values.mongodb.port }}/hyperdx
+  mongoUri:
+    valueFrom:
+      secretKeyRef:
+        name: hyperdx-secret
+        key: MONGO_URI
+
+  # Pod-level annotations (applied to the deployment pods)
+  annotations: {}
+    # myAnnotation: "myValue"
+
+  # Pod-level labels (applied to the deployment pods)
+  labels: {}
+    # myLabel: "myValue"
+  env: []
+    # Additional environment variables can be configured here
+    # This is preserved for backward compatibility and advanced use cases
+
+  # Default connections and sources (ENABLED BY DEFAULT)
+  # Set to empty string to disable: defaultConnections: ""
+  defaultConnections: |
+    [
+      {
+        "name": "Local ClickHouse",
+        "host": "http://{{ include "hdx-oss.fullname" . }}-clickhouse:8123",
+        "port": 8123,
+        "username": "app",
+        "password": "{{ .Values.clickhouse.config.users.appUserPassword.valueFrom.secretKeyRef.name | fromSecret .Release.Namespace "clickhouse-app-user-password" | b64dec }}"
+      }
+    ]
+
+  # Set to empty string to disable: defaultSources: ""
+  defaultSources: |
+    [
+      {
+        "from": {
+          "databaseName": "default",
+          "tableName": "otel_logs"
+        },
+        "kind": "log",
+        "timestampValueExpression": "TimestampTime",
+        "name": "Logs",
+        "displayedTimestampValueExpression": "Timestamp",
+        "implicitColumnExpression": "Body",
+        "serviceNameExpression": "ServiceName",
+        "bodyExpression": "Body",
+        "eventAttributesExpression": "LogAttributes",
+        "resourceAttributesExpression": "ResourceAttributes",
+        "defaultTableSelectExpression": "Timestamp,ServiceName,SeverityText,Body",
+        "severityTextExpression": "SeverityText",
+        "traceIdExpression": "TraceId",
+        "spanIdExpression": "SpanId",
+        "connection": "Local ClickHouse",
+        "traceSourceId": "Traces",
+        "sessionSourceId": "Sessions",
+        "metricSourceId": "Metrics"
+      },
+      {
+        "from": {
+          "databaseName": "default",
+          "tableName": "otel_traces"
+        },
+        "kind": "trace",
+        "timestampValueExpression": "Timestamp",
+        "name": "Traces",
+        "displayedTimestampValueExpression": "Timestamp",
+        "implicitColumnExpression": "SpanName",
+        "serviceNameExpression": "ServiceName",
+        "bodyExpression": "SpanName",
+        "eventAttributesExpression": "SpanAttributes",
+        "resourceAttributesExpression": "ResourceAttributes",
+        "defaultTableSelectExpression": "Timestamp,ServiceName,StatusCode,round(Duration/1e6),SpanName",
+        "traceIdExpression": "TraceId",
+        "spanIdExpression": "SpanId",
+        "durationExpression": "Duration",
+        "durationPrecision": 9,
+        "parentSpanIdExpression": "ParentSpanId",
+        "spanNameExpression": "SpanName",
+        "spanKindExpression": "SpanKind",
+        "statusCodeExpression": "StatusCode",
+        "statusMessageExpression": "StatusMessage",
+        "connection": "Local ClickHouse",
+        "logSourceId": "Logs",
+        "sessionSourceId": "Sessions",
+        "metricSourceId": "Metrics"
+      },
+      {
+        "from": {
+          "databaseName": "default",
+          "tableName": ""
+        },
+        "kind": "metric",
+        "timestampValueExpression": "TimeUnix",
+        "name": "Metrics",
+        "resourceAttributesExpression": "ResourceAttributes",
+        "metricTables": {
+          "gauge": "otel_metrics_gauge",
+          "histogram": "otel_metrics_histogram",
+          "sum": "otel_metrics_sum",
+          "_id": "682586a8b1f81924e628e808",
+          "id": "682586a8b1f81924e628e808"
+        },
+        "connection": "Local ClickHouse",
+        "logSourceId": "Logs",
+        "traceSourceId": "Traces",
+        "sessionSourceId": "Sessions"
+      },
+      {
+        "from": {
+          "databaseName": "default",
+          "tableName": "hyperdx_sessions"
+        },
+        "kind": "session",
+        "timestampValueExpression": "TimestampTime",
+        "name": "Sessions",
+        "displayedTimestampValueExpression": "Timestamp",
+        "implicitColumnExpression": "Body",
+        "serviceNameExpression": "ServiceName",
+        "bodyExpression": "Body",
+        "eventAttributesExpression": "LogAttributes",
+        "resourceAttributesExpression": "ResourceAttributes",
+        "defaultTableSelectExpression": "Timestamp,ServiceName,SeverityText,Body",
+        "severityTextExpression": "SeverityText",
+        "traceIdExpression": "TraceId",
+        "spanIdExpression": "SpanId",
+        "connection": "Local ClickHouse",
+        "logSourceId": "Logs",
+        "traceSourceId": "Traces",
+        "metricSourceId": "Metrics"
+      }
+    ]
+
+  # See https://github.com/hyperdxio/hyperdx/blob/v2/packages/api/docs/auto_provision/AUTO_PROVISION.md
+  # for detailed configuration options
+
+  ingress:
+    enabled: true
+    ingressClassName: nginx-1.6.4
+    annotations: {}
+    host: "monitoring.dev.verloop.io"  # Production domain
+    proxyBodySize: "100m"
+    proxyConnectTimeout: "60"
+    proxySendTimeout: "60"
+    proxyReadTimeout: "60"
+    tls:
+      enabled: false
+
+    # Additional ingresses - these will only be rendered if the whole ingress object is enabled
+    # This should be used to expose other deployments/services from the helm chart on the cluster
+    # e.g. expose the OTEL collector.
+    additionalIngresses: []
+    # - name: otel-collector
+    #   annotations: {}
+    #   ingressClassName: nginx
+    #   hosts:
+    #     - host: collector.example.com
+    #       paths:
+    #         - path: /
+    #           pathType: Prefix
+    #           port: 4318
+    #   tls:
+    #     - secretName: otel-collector-tls
+    #       hosts:
+    #         - collector.example.com
+
+  replicas: 1
+
+  podDisruptionBudget:
+    enabled: false
+
+  # Service configuration
+  service:
+    type: ClusterIP  # Use ClusterIP for security. For external access, use ingress with proper TLS and authentication
+    # Service-level annotations (applied to the Kubernetes service resource)
+    annotations: {}
+      # Example service annotations:
+      # service.beta.kubernetes.io/aws-load-balancer-internal: "true"
+      # cloud.google.com/load-balancer-type: "Internal"
+
+mongodb:
+  enabled: false
+
+clickhouse:
+  image: "clickhouse/clickhouse-server:24-alpine"
+  port: 8123
+  nativePort: 9000
+  enabled: true
+  # Add nodeSelector and tolerations for clickhouse service
+  nodeSelector: {}
+    # Example:
+    # kubernetes.io/os: linux
+  # node-role.kubernetes.io/worker: "true"
+  tolerations: []
+    # Example:
+    # - key: "key1"
+    #   operator: "Equal"
+    #   value: "value1"
+  #   effect: "NoSchedule"
+
+  # Service configuration
+  service:
+    type: ClusterIP  # Use ClusterIP for security. For external access, use ingress with proper TLS and authentication
+    # Service-level annotations (applied to the Kubernetes service resource)
+    annotations: {}
+      # Example service annotations:
+      # service.beta.kubernetes.io/aws-load-balancer-internal: "true"
+    # cloud.google.com/load-balancer-type: "Internal"
+
+  persistence:
+    enabled: true
+    dataSize: 10Gi
+    logSize: 5Gi
+  prometheus:
+    enabled: true
+    port: 9363
+    endpoint: "/metrics"
+  config:
+    users:
+      appUserPassword:
+        valueFrom:
+          secretKeyRef:
+            name: hyperdx-secret
+            key: clickhouse-app-user-password
+      otelUserPassword:
+        valueFrom:
+          secretKeyRef:
+            name: hyperdx-secret
+            key: clickhouse-otel-user-password
+      otelUserName: "otelcollector"
+    # Network CIDRs for Kubernetes cluster access control
+    # These CIDRs ensure ClickHouse connections are locked down to intra-cluster only
+    # For PRODUCTION: Remove development CIDRs and keep only your cluster's specific CIDR
+    # For DEVELOPMENT: Multiple common CIDRs are included for convenience
+    clusterCidrs:
+      - "10.0.0.0/8"        # Most Kubernetes clusters (including GKE, EKS, AKS)
+      - "172.16.0.0/12"     # Some cloud providers and Docker Desktop
+      - "192.168.0.0/16"    # OrbStack, Minikube, and local development
+
+otel:
+  enabled: false
+
+tasks:
+  enabled: false
